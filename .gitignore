@@ -1,0 +1,11 @@
+# ./
+.vscode
+outputs
+testcases
+
+main
+
+# ./utilities
+catbin
+generate
+verify
