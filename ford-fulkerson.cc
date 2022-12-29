@@ -1,5 +1,6 @@
 #include <omp.h>
 
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -9,34 +10,53 @@
 #include "graph.hh"
 #include "utility.hh"
 
-int getcf(int V, int S, int T, int *residual, int *rpath) {
+struct Data {
+    int V;
+    int S;
+    int T;
+    int ncpus;
+    int *capacity;
+    int *edge;
+    int *nedge;
+    int *residual;
+    int *rpath;
+    bool *visited;
+};
+
+int getcf(Data *data) {
+    int V = data->V;
+    int S = data->S;
+    int T = data->T;
     int cf = 0x7fffffff;
-    for (int u = rpath[T], v = T; v != S; u = rpath[v = u]) {
-        cf = std::min(cf, residual[u * V + v]);
+    for (int u = data->rpath[T], v = T; v != S; u = data->rpath[v = u]) {
+        cf = min(cf, data->residual[u * V + v]);
     }
     return cf;
 }
 
-int getPath(int V, int S, int T, int *edge, int *nedge, int *residual, int *rpath, bool *visited) {
+int getPath(Data *data) {
+    int V = data->V;
+    int S = data->S;
+    int T = data->T;
     std::queue<int> que;
     int u, v;
 
-    memset(visited, false, sizeof(bool) * V);
+    memset(data->visited, false, sizeof(bool) * V);
     que.emplace(S);
-    rpath[S] = S;
-    visited[S] = true;
+    data->rpath[S] = S;
+    data->visited[S] = true;
 
     while (!que.empty()) {
         u = que.front();
         que.pop();
-        for (int i = 0; i < nedge[u]; i++) {
-            v = edge[u * V + i];
-            if (!visited[v] && residual[u * V + v] > 0) {
-                rpath[v] = u;
-                visited[v] = true;
+        for (int i = 0; i < data->nedge[u]; i++) {
+            v = data->edge[u * V + i];
+            if (!data->visited[v] && data->residual[u * V + v] > 0) {
+                data->rpath[v] = u;
+                data->visited[v] = true;
                 que.emplace(v);
                 if (v == T) {
-                    return getcf(V, S, T, residual, rpath);
+                    return getcf(data);
                 }
             }
         }
@@ -46,49 +66,53 @@ int getPath(int V, int S, int T, int *edge, int *nedge, int *residual, int *rpat
 }
 
 void FordFulkerson(Graph *graph, int *flow) {
-    int V = graph->V;
-    int S = graph->S;
-    int T = graph->T;
-    int *capacity = (int *)malloc(V * V * sizeof(int));
-    int *edge = (int *)malloc(V * V * sizeof(int));
-    int *nedge = (int *)malloc(V * sizeof(int));
-    int *residual = (int *)malloc(V * V * sizeof(int));
-    int *rpath = (int *)malloc(V * sizeof(int));
-    bool *visited = (bool *)malloc(V * sizeof(bool));
+    Data *data = (Data *)malloc(sizeof(Data));
+    int V = data->V = graph->V;
+    int S = data->S = graph->S;
+    int T = data->T = graph->T;
+    data->capacity = (int *)malloc(V * V * sizeof(int));
+    data->edge = (int *)malloc(V * V * sizeof(int));
+    data->nedge = (int *)malloc(V * sizeof(int));
+    data->residual = (int *)malloc(V * V * sizeof(int));
+    data->rpath = (int *)malloc(V * sizeof(int));
+    data->visited = (bool *)malloc(V * sizeof(bool));
     int f, cf;
 
-    memset(capacity, 0, V * V * sizeof(int));
+    memset(data->capacity, 0, V * V * sizeof(int));
 
-    for (int r = 0; r < V; r++) {
-        nedge[r] = graph->edge[r].size();
-        for (int i = 0; i < nedge[r]; i++) {
-            edge[r * V + i] = graph->edge[r][i].first;
-            capacity[r * V + graph->edge[r][i].first] = graph->edge[r][i].second;
+    for (int u = 0; u < V; u++) {
+        data->nedge[u] = graph->edge[u].size();
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = graph->edge[u][i].first;
+            data->edge[u * V + i] = v;
+            data->capacity[u * V + v] = graph->edge[u][i].second;
         }
     }
-    for (int r = 0; r < V; r++) {
-        for (int c = 0; c < V; c++) {
-            residual[r * V + c] = capacity[r * V + c];
-        }
-    }
-
-    for (f = 0; cf = getPath(V, S, T, edge, nedge, residual, rpath, visited); f += cf) {
-        for (int u = rpath[T], v = T; v != S; u = rpath[v = u]) {
-            residual[u * V + v] -= cf;
-            residual[v * V + u] += cf;
+    for (int u = 0; u < V; u++) {
+        for (int v = 0; v < V; v++) {
+            data->residual[u * V + v] = data->capacity[u * V + v];
         }
     }
 
-    for (int r = 0; r < V; r++) {
-        for (int c = 0; c < V; c++) {
-            flow[r * V + c] = std::max(0, capacity[r * V + c] - residual[r * V + c]);
+    for (f = 0; cf = getPath(data); f += cf) {
+        for (int u = data->rpath[T], v = T; v != S; u = data->rpath[v = u]) {
+            data->residual[u * V + v] -= cf;
+            data->residual[v * V + u] += cf;
         }
     }
 
-    free(capacity);
-    free(edge);
-    free(nedge);
-    free(residual);
-    free(rpath);
-    free(visited);
+    for (int u = 0; u < V; u++) {
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
+            flow[u * V + v] = data->capacity[u * V + v] - data->residual[u * V + v];
+        }
+    }
+
+    free(data->capacity);
+    free(data->edge);
+    free(data->nedge);
+    free(data->residual);
+    free(data->rpath);
+    free(data->visited);
+    free(data);
 }
