@@ -5,10 +5,11 @@
 #include "ford-fulkerson.hh"
 #include "graph.hh"
 #include "push-relabel.hh"
+#include "relabel-to-front.hh"
 #include "utility.hh"
 
 #ifndef METHOD
-#define METHOD 1
+#define METHOD 2
 #endif
 
 int main(int argc, char **argv) {
@@ -32,6 +33,10 @@ int main(int argc, char **argv) {
     TIMING_START(PushRelabel);
     PushRelabel(graph, flow);
     TIMING_END(PushRelabel);
+#elif METHOD == 2
+    TIMING_START(RelabelToFront);
+    RelabelToFront(graph, flow);
+    TIMING_END(RelabelToFront);
 #endif
 
     // Max-Flow End
