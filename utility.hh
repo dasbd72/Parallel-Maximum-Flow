@@ -32,6 +32,9 @@
 #define TIMING_END(arg)
 #endif  // TIMING
 
+#define INT_MAX 0x7fffffff
+
 void print(int V, int *residual);
+int min(int x, int y);
 
 #endif  // UTILITY

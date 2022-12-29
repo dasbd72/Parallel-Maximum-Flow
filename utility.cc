@@ -10,3 +10,10 @@ void print(int V, int *A) {
         printf("\n");
     }
 }
+
+int min(int x, int y) {
+    if (x < y)
+        return x;
+    else
+        return y;
+}
