@@ -3,17 +3,37 @@
 #include <iostream>
 #include <queue>
 
-int verify(int V, int S, int T, int *capacity, int *flow, bool *visit) {
+enum {
+    SUCCESS,
+    SELF_CYCLE,
+    NEGATIVE_FLOW,
+    CAPACITY_EXCEED,
+    NETFLOW_NONZERO,
+    REACHED_TARGET
+};
+
+int verify(int V, int S, int T, int *capacity, int *flow, bool *visit, int *sum) {
+    memset(sum, 0, sizeof(int) * V);
     for (int r = 0; r < V; r++) {
         for (int c = 0; c < V; c++) {
             if (r == c) {
                 if (!(flow[r * V + c] == 0))
-                    return 1;
+                    return SELF_CYCLE;
             } else {
+                if (!(flow[r * V + c] >= 0))
+                    return NEGATIVE_FLOW;
                 if (!(flow[r * V + c] <= capacity[r * V + c]))
-                    return 2;
+                    return CAPACITY_EXCEED;
                 capacity[r * V + c] -= flow[r * V + c];
             }
+            sum[r] -= flow[r * V + c];
+            sum[c] += flow[r * V + c];
+        }
+    }
+
+    for (int i = 0; i < V; i++) {
+        if (i != S && i != T && sum[i] != 0) {
+            return NETFLOW_NONZERO;
         }
     }
 
@@ -30,12 +50,12 @@ int verify(int V, int S, int T, int *capacity, int *flow, bool *visit) {
                 visit[v] = true;
                 q.emplace(v);
                 if (v == T)
-                    return 3;
+                    return REACHED_TARGET;
             }
         }
     }
 
-    return 0;
+    return SUCCESS;
 }
 
 int main(int argc, char **argv) {
@@ -51,6 +71,7 @@ int main(int argc, char **argv) {
     int *capacity;  // Stores input
     int *flow;      // Stores output
     bool *visit;
+    int *sum;
     int tmp[3];
 
     // Input file
@@ -75,16 +96,34 @@ int main(int argc, char **argv) {
 
     // Verify
     visit = (bool *)malloc(sizeof(bool) * V);
-    int err = verify(V, S, T, capacity, flow, visit);
-    if (err == 0) {
+    sum = (int *)malloc(sizeof(int) * V);
+    int err = verify(V, S, T, capacity, flow, visit, sum);
+    if (err == SUCCESS) {
         printf("passed\n");
     } else {
         printf("failed ouo\n");
-        printf("error: %d\n", err);
+        switch (err) {
+            case SELF_CYCLE:
+                printf("SELF_CYCLE\n");
+                break;
+            case NEGATIVE_FLOW:
+                printf("NEGATIVE_FLOW\n");
+                break;
+            case CAPACITY_EXCEED:
+                printf("CAPACITY_EXCEED\n");
+                break;
+            case NETFLOW_NONZERO:
+                printf("NETFLOW_NONZERO\n");
+                break;
+            case REACHED_TARGET:
+                printf("REACHED_TARGET\n");
+                break;
+        }
     }
 
     // Finalize
     free(capacity);
     free(flow);
+    free(sum);
     return 0;
 }
