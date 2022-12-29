@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstring>
 #include <iostream>
 #include <random>
 #include <thread>
@@ -17,18 +18,39 @@ int main(int argc, char** argv) {
     std::uniform_real_distribution<double> distribution(0, 1);
     std::uniform_int_distribution<int> cap_distribution(0, 10);
 
+    memset(capacity, 0, sizeof(int) * V * V);
+    // one-way edge
     for (int r = 0; r < V; r++) {
-        for (int c = 0; c < V; c++) {
-            if (r == c) {
-                capacity[r * V + c] = 0;
-            } else if (distribution(generator) < 0.75) {
-                capacity[r * V + c] = cap_distribution(cap_generator);
-            }
-            if (capacity[r * V + c] != 0) {
-                E++;
+        for (int c = 0; c < r; c++) {
+            double prob = distribution(generator);
+            int cap = cap_distribution(cap_generator);
+            if (cap > 0) {
+                if (prob < 0.2) {
+                } else if (prob < 0.6) {
+                    capacity[r * V + c] = cap;
+                    E++;
+                } else {
+                    capacity[c * V + r] = cap;
+                    E++;
+                }
             }
         }
     }
+    // two-way edge
+    // for (int r = 0; r < V; r++) {
+    //     for (int c = 0; c < V; c++) {
+    //         if (r != c) {
+    //             double prob = distribution(generator);
+    //             int cap = cap_distribution(cap_generator);
+    //             if (cap > 0) {
+    //                 if (prob < 0.8) {
+    //                     capacity[r * V + c] = cap;
+    //                     E++;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     file = fopen(filename, "wb");
     fwrite(&V, sizeof(int), 1, file);
@@ -40,10 +62,12 @@ int main(int argc, char** argv) {
                 tmp[1] = c;
                 tmp[2] = capacity[r * V + c];
                 fwrite(tmp, sizeof(int), 3, file);
+                E--;
             }
         }
     }
     fclose(file);
+    assert(E == 0);
 
     free(capacity);
 }

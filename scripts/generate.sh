@@ -1,5 +1,5 @@
-cd utilities
+cd tools
 make generate
 cd ..
 
-./utilities/generate $1 testcases/$2
+srun ./tools/generate $1 testcases/$2
