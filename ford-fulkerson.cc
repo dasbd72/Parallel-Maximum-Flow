@@ -94,7 +94,7 @@ void FordFulkerson(Graph *graph, int *flow) {
         }
     }
 
-    for (f = 0; cf = getPath(data); f += cf) {
+    for (f = 0; (cf = getPath(data)); f += cf) {
         for (int u = data->rpath[T], v = T; v != S; u = data->rpath[v = u]) {
             data->residual[u * V + v] -= cf;
             data->residual[v * V + u] += cf;
