@@ -1,3 +1,5 @@
+#include "push-relabel.hh"
+
 #include <omp.h>
 
 #include <cstdio>
