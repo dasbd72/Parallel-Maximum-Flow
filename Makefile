@@ -3,6 +3,7 @@ CXX = g++
 LDFLAGS = -lm
 CXXFLAGS = -Wall -Wextra -O3 -fopenmp
 # CXXFLAGS += -g -fsanitize=address
+CXXFLAGS += -DMETHOD=1
 CXXFLAGS += -DTIMING
 CXXFLAGS += -DDEBUG
 
