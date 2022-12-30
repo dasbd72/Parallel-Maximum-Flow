@@ -1,3 +1,5 @@
+#include "ford-fulkerson.hh"
+
 #include <omp.h>
 
 #include <cassert>
