@@ -5,11 +5,12 @@
 #include <thread>
 
 int main(int argc, char** argv) {
-    assert(argc == 3);
+    assert(argc == 4);
 
     int V = atoi(argv[1]);
+    double D = (double)atoi(argv[2]) / 100.0;
     int E = 0;
-    char* filename = argv[2];
+    char* filename = argv[3];
     FILE* file;
     int* capacity = (int*)malloc(V * V * sizeof(int));
     int tmp[3];
@@ -25,32 +26,17 @@ int main(int argc, char** argv) {
             double prob = distribution(generator);
             int cap = cap_distribution(cap_generator);
             if (cap > 0) {
-                if (prob < 0.2) {
-                } else if (prob < 0.6) {
-                    capacity[r * V + c] = cap;
+                if (prob < D) {
                     E++;
-                } else {
-                    capacity[c * V + r] = cap;
-                    E++;
+                    if (prob < D / 2) {
+                        capacity[r * V + c] = cap;
+                    } else {
+                        capacity[c * V + r] = cap;
+                    }
                 }
             }
         }
     }
-    // two-way edge
-    // for (int r = 0; r < V; r++) {
-    //     for (int c = 0; c < V; c++) {
-    //         if (r != c) {
-    //             double prob = distribution(generator);
-    //             int cap = cap_distribution(cap_generator);
-    //             if (cap > 0) {
-    //                 if (prob < 0.8) {
-    //                     capacity[r * V + c] = cap;
-    //                     E++;
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     file = fopen(filename, "wb");
     fwrite(&V, sizeof(int), 1, file);
