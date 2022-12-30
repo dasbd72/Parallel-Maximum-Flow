@@ -2,4 +2,4 @@ cd tools
 make generate
 cd ..
 
-srun ./tools/generate $1 testcases/$2
+srun ./tools/generate $1 $2 testcases/$3

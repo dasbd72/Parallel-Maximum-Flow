@@ -4,6 +4,7 @@ outputs
 testcases
 
 main
+*.o
 
 # ./utilities
 catbin
