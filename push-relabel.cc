@@ -147,6 +147,9 @@ void PushRelabel(Graph *graph, int *flow) {
                 if (data->height[u] > data->height[v]) {
                     push(data, u, v);
                     isMin = false;
+                    if (data->excess[u] == 0) {
+                        break;
+                    }
                 }
             }
         }
