@@ -6,16 +6,14 @@
 #include "graph.hh"
 #include "parallel-push-relabel.hh"
 #include "push-relabel.hh"
-#include "relabel-to-front.hh"
 #include "utility.hh"
 
 enum Method {
     ff,
     pr,
     ppr,
-    r2f,
 };
-const Method method = ppr;
+const Method method = pr;
 
 int main(int argc, char **argv) {
     Graph *graph = new Graph(argc, argv);  // Graph
@@ -45,11 +43,6 @@ int main(int argc, char **argv) {
             TIMING_START(ParallelPushRelabel);
             ParallelPushRelabel(graph, flow);
             TIMING_END(ParallelPushRelabel);
-            break;
-        case r2f:
-            TIMING_START(RelabelToFront);
-            RelabelToFront(graph, flow);
-            TIMING_END(RelabelToFront);
             break;
 
         default:

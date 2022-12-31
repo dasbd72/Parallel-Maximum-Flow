@@ -1,14 +1,13 @@
 CC = gcc
 CXX = g++
 LDFLAGS = -lm
-CXXFLAGS = -Wall -Wextra -O3 -fopenmp
+CXXFLAGS = -Wall -Wextra -O3 -fopenmp -pthread
 # CXXFLAGS += -g -fsanitize=address
-CXXFLAGS += -DMETHOD=1
 CXXFLAGS += -DTIMING
 CXXFLAGS += -DDEBUG
 
 EXE = main
-OBJ = main.o graph.o utility.o ford-fulkerson.o push-relabel.o relabel-to-front.o
+OBJ = main.o graph.o utility.o ford-fulkerson.o push-relabel.o parallel-push-relabel.o
 
 alls: $(EXE)
 
@@ -30,7 +29,7 @@ ford-fulkerson.o: ford-fulkerson.cc
 push-relabel.o: push-relabel.cc
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $^
 
-relabel-to-front.o: relabel-to-front.cc
+parallel-push-relabel.o: parallel-push-relabel.cc
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $^
 
 clean:
