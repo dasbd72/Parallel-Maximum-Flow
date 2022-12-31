@@ -59,15 +59,14 @@ int verify(int V, int S, int T, int *capacity, int *flow, bool *visit, int *sum)
 }
 
 int main(int argc, char **argv) {
-    assert(argc == 5);
+    assert(argc == 3);
 
     char *input_filename = argv[1];
     char *output_filename = argv[2];
     FILE *input_file;
     FILE *output_file;
     int V, E;
-    int S = atoi(argv[3]);
-    int T = atoi(argv[4]);
+    int S, T;
     int *capacity;  // Stores input
     int *flow;      // Stores output
     bool *visit;
@@ -78,6 +77,8 @@ int main(int argc, char **argv) {
     input_file = fopen(input_filename, "rb");
     fread(&V, sizeof(int), 1, input_file);
     fread(&E, sizeof(int), 1, input_file);
+    fread(&S, sizeof(int), 1, input_file);
+    fread(&T, sizeof(int), 1, input_file);
     capacity = (int *)malloc(V * V * sizeof(int));
     for (int i = 0; i < V * V; i++) {
         capacity[i] = 0;

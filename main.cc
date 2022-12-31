@@ -4,13 +4,18 @@
 
 #include "ford-fulkerson.hh"
 #include "graph.hh"
+#include "parallel-push-relabel.hh"
 #include "push-relabel.hh"
 #include "relabel-to-front.hh"
 #include "utility.hh"
 
-#ifndef METHOD
-#define METHOD 2
-#endif
+enum Method {
+    ff,
+    pr,
+    ppr,
+    r2f,
+};
+const Method method = ppr;
 
 int main(int argc, char **argv) {
     Graph *graph = new Graph(argc, argv);  // Graph
@@ -25,20 +30,31 @@ int main(int argc, char **argv) {
     memset(flow, 0, graph->V * graph->V * sizeof(int));
 
     // Max-Flow
-#if METHOD == 0
-    TIMING_START(FordFulkerson);
-    FordFulkerson(graph, flow);
-    TIMING_END(FordFulkerson);
-#elif METHOD == 1
-    TIMING_START(PushRelabel);
-    PushRelabel(graph, flow);
-    TIMING_END(PushRelabel);
-#elif METHOD == 2
-    TIMING_START(RelabelToFront);
-    RelabelToFront(graph, flow);
-    TIMING_END(RelabelToFront);
-#endif
+    switch (method) {
+        case ff:
+            TIMING_START(FordFulkerson);
+            FordFulkerson(graph, flow);
+            TIMING_END(FordFulkerson);
+            break;
+        case pr:
+            TIMING_START(PushRelabel);
+            PushRelabel(graph, flow);
+            TIMING_END(PushRelabel);
+            break;
+        case ppr:
+            TIMING_START(ParallelPushRelabel);
+            ParallelPushRelabel(graph, flow);
+            TIMING_END(ParallelPushRelabel);
+            break;
+        case r2f:
+            TIMING_START(RelabelToFront);
+            RelabelToFront(graph, flow);
+            TIMING_END(RelabelToFront);
+            break;
 
+        default:
+            break;
+    }
     // Max-Flow End
 
     // Output

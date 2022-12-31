@@ -9,11 +9,9 @@
 #include <vector>
 
 Graph::Graph(int argc, char **argv) {
-    assert(argc == 5);
+    assert(argc == 3);
     input_filename = argv[1];
     output_filename = argv[2];
-    S = atoi(argv[3]);
-    T = atoi(argv[4]);
     ncpus = omp_get_max_threads();
 }
 
@@ -24,6 +22,8 @@ void Graph::input() {
     input_file = fopen(input_filename, "rb");
     fread(&V, sizeof(int), 1, input_file);
     fread(&E, sizeof(int), 1, input_file);
+    fread(&S, sizeof(int), 1, input_file);
+    fread(&T, sizeof(int), 1, input_file);
     edge.resize(V);
     for (int e = 0; e < E; e++) {
         fread(tmp, sizeof(int), 3, input_file);

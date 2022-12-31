@@ -10,14 +10,22 @@ int main(int argc, char** argv) {
     int V = atoi(argv[1]);
     double D = (double)atoi(argv[2]) / 100.0;
     int E = 0;
+    int S;
+    int T;
     char* filename = argv[3];
     FILE* file;
     int* capacity = (int*)malloc(V * V * sizeof(int));
     int tmp[3];
 
-    std::mt19937 generator, cap_generator;
+    std::mt19937 generator, cap_generator, st_generator;
     std::uniform_real_distribution<double> distribution(0, 1);
-    std::uniform_int_distribution<int> cap_distribution(0, 10);
+    std::uniform_int_distribution<int> cap_distribution(0, 1000);
+    std::uniform_int_distribution<int> st_distribution(0, V - 1);
+
+    S = st_distribution(st_generator);
+    do {
+        T = st_distribution(st_generator);
+    } while (T == S);
 
     memset(capacity, 0, sizeof(int) * V * V);
     // one-way edge
@@ -41,6 +49,8 @@ int main(int argc, char** argv) {
     file = fopen(filename, "wb");
     fwrite(&V, sizeof(int), 1, file);
     fwrite(&E, sizeof(int), 1, file);
+    fwrite(&S, sizeof(int), 1, file);
+    fwrite(&T, sizeof(int), 1, file);
     for (int r = 0; r < V; r++) {
         for (int c = 0; c < V; c++) {
             if (capacity[r * V + c] != 0) {
