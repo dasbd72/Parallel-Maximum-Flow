@@ -100,9 +100,12 @@ int main(int argc, char **argv) {
     sum = (int *)malloc(sizeof(int) * V);
     int err = verify(V, S, T, capacity, flow, visit, sum);
     if (err == SUCCESS) {
-        printf("passed\n");
+        printf("\033[1;32m");
+        printf("Passed.\n");
+        printf("\033[0m");
     } else {
-        printf("failed ouo\n");
+        printf("\033[1;31m");
+        printf("Failed.\n");
         switch (err) {
             case SELF_CYCLE:
                 printf("SELF_CYCLE\n");
@@ -120,6 +123,7 @@ int main(int argc, char **argv) {
                 printf("REACHED_TARGET\n");
                 break;
         }
+        printf("\033[0m");
     }
 
     // Finalize
