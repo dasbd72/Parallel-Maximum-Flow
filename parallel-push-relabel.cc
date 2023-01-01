@@ -1,6 +1,7 @@
 #include "parallel-push-relabel.hh"
 
 #include <omp.h>
+#include <pthread.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -22,22 +23,28 @@ struct Data {
     int *excess;
     int *residual;
     int *height;
+    pthread_mutex_t *vertexLock;
     int fifoHead;
     int fifoTail;
     int fifoSize;
+    pthread_mutex_t fifoLock;
     int *fifo;
 };
 
 inline void fifoPush(Data *data, int u) {
+    pthread_mutex_lock(&data->fifoLock);
     data->fifo[data->fifoTail] = u;
     data->fifoTail = (data->fifoTail + 1) % data->V;
     data->fifoSize++;
+    pthread_mutex_unlock(&data->fifoLock);
 }
 
 inline int fifoPop(Data *data) {
+    pthread_mutex_lock(&data->fifoLock);
     int retVal = data->fifo[data->fifoHead];
     data->fifoHead = (data->fifoHead + 1) % data->V;
     data->fifoSize--;
+    pthread_mutex_unlock(&data->fifoLock);
     return retVal;
 }
 
@@ -67,16 +74,36 @@ inline void relabel(Data *data, int u) {
     data->height[u] = minHeight + 1;
 }
 
-inline int getExcess(Data *data) {
+void *pushRelabelThread(void *arg) {
+    Data *data = (Data *)arg;
     int V = data->V;
-    int S = data->S;
-    int T = data->T;
-    for (int i = 0; i < V; i++) {
-        if (i != S && i != T && data->excess[i] > 0) {
-            return i;
+    while (data->fifoSize) {
+        int u = fifoPop(data);
+        pthread_mutex_lock(&data->vertexLock[u]);
+        bool isMin = true;
+        for (int v = 0; v < V; v++) {
+            if (data->residual[u * V + v] > 0) {
+                if (data->height[u] > data->height[v]) {
+                    isMin = false;
+                    if (pthread_mutex_trylock(&data->vertexLock[v]) == 0) {
+                        push(data, u, v);
+                        pthread_mutex_unlock(&data->vertexLock[v]);
+                        if (data->excess[u] == 0) {
+                            break;
+                        }
+                    }
+                }
+            }
         }
+        if (isMin) {
+            relabel(data, u);
+        }
+        if (data->excess[u] > 0) {
+            fifoPush(data, u);
+        }
+        pthread_mutex_unlock(&data->vertexLock[u]);
     }
-    return -1;
+    return NULL;
 }
 }  // namespace PPR
 using namespace PPR;
@@ -93,18 +120,22 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     data->excess = (int *)malloc(sizeof(int) * V);
     data->residual = (int *)malloc(sizeof(int) * V * V);
     data->height = (int *)malloc(sizeof(int) * V);
+    data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
     data->fifoHead = 0;
     data->fifoTail = 0;
     data->fifoSize = 0;
     data->fifo = (int *)malloc(sizeof(int) * V);
+    pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * data->ncpus);
 
     TIMING_START(_init);
+#pragma omp parallel for collapse(2)
     for (int u = 0; u < V; u++) {
         for (int v = 0; v < V; v++) {
             data->capacity[u * V + v] = 0;
             data->residual[u * V + v] = 0;
         }
     }
+#pragma omp parallel for
     for (int u = 0; u < V; u++) {
         data->nedge[u] = graph->edge[u].size();
         for (int i = 0; i < data->nedge[u]; i++) {
@@ -114,15 +145,23 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
             data->residual[u * V + v] = graph->edge[u][i].second;
         }
     }
+#pragma omp parallel for
     for (int u = 0; u < V; u++) {
         data->excess[u] = 0;
         data->height[u] = 0;
     }
     TIMING_END(_init);
 
+#pragma omp parallel for
+    for (int u = 0; u < V; u++) {
+        data->vertexLock[u] = PTHREAD_MUTEX_INITIALIZER;
+    }
+    data->fifoLock = PTHREAD_MUTEX_INITIALIZER;
+
     TIMING_START(_preflow);
     data->height[S] = V;
     data->excess[S] = INT_MAX;
+#pragma omp parallel for
     for (int i = 0; i < data->nedge[S]; i++) {
         int v = data->edge[S * V + i];
         int delta = data->residual[S * V + v];
@@ -139,27 +178,22 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     TIMING_END(_preflow);
 
     TIMING_START(_innerPushRelabel);
-    while (data->fifoSize) {
-        int u = fifoPop(data);
-        bool isMin = true;
-        for (int v = 0; v < V; v++) {
-            if (data->residual[u * V + v] > 0) {
-                if (data->height[u] > data->height[v]) {
-                    push(data, u, v);
-                    isMin = false;
-                }
-            }
-        }
-        if (isMin) {
-            relabel(data, u);
-        }
-        if (data->excess[u] > 0) {
-            fifoPush(data, u);
-        }
+    for (int tid = 0; tid < data->ncpus; tid++) {
+        pthread_create(&threads[tid], 0, pushRelabelThread, data);
+    }
+    for (int tid = 0; tid < data->ncpus; tid++) {
+        pthread_join(threads[tid], NULL);
     }
     TIMING_END(_innerPushRelabel);
 
+#pragma omp parallel for
+    for (int u = 0; u < V; u++) {
+        pthread_mutex_destroy(&data->vertexLock[u]);
+    }
+    pthread_mutex_destroy(&data->fifoLock);
+
     TIMING_START(_flow);
+#pragma omp parallel for
     for (int u = 0; u < V; u++) {
         for (int i = 0; i < data->nedge[u]; i++) {
             int v = data->edge[u * V + i];
@@ -174,6 +208,8 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     free(data->excess);
     free(data->residual);
     free(data->height);
+    free(data->vertexLock);
     free(data->fifo);
     free(data);
+    free(threads);
 }
