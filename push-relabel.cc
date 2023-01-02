@@ -35,9 +35,12 @@ inline void fifoPush(Data *data, int u) {
 }
 
 inline int fifoPop(Data *data) {
-    int retVal = data->fifo[data->fifoHead];
-    data->fifoHead = (data->fifoHead + 1) % data->V;
-    data->fifoSize--;
+    int retVal = -1;
+    if (data->fifoSize > 0) {
+        retVal = data->fifo[data->fifoHead];
+        data->fifoHead = (data->fifoHead + 1) % data->V;
+        data->fifoSize--;
+    }
     return retVal;
 }
 
@@ -60,7 +63,8 @@ inline void push(Data *data, int u, int v) {
 inline void relabel(Data *data, int u) {
     int V = data->V;
     int minHeight = INT_MAX;
-    for (int v = 0; v < V; v++) {
+    for (int i = 0; i < data->nedge[u]; i++) {
+        int v = data->edge[u * V + i];
         if (data->residual[u * V + v] > 0)
             minHeight = min(minHeight, data->height[v]);
     }
@@ -106,10 +110,13 @@ void PushRelabel(Graph *graph, int *flow) {
         }
     }
     for (int u = 0; u < V; u++) {
-        data->nedge[u] = graph->edge[u].size();
-        for (int i = 0; i < data->nedge[u]; i++) {
+        data->nedge[u] = 0;
+    }
+    for (int u = 0; u < V; u++) {
+        for (int i = 0; i < (int)graph->edge[u].size(); i++) {
             int v = graph->edge[u][i].first;
-            data->edge[u * V + i] = v;
+            data->edge[u * V + data->nedge[u]++] = v;
+            data->edge[v * V + data->nedge[v]++] = u;
             data->capacity[u * V + v] = graph->edge[u][i].second;
             data->residual[u * V + v] = graph->edge[u][i].second;
         }
@@ -126,7 +133,7 @@ void PushRelabel(Graph *graph, int *flow) {
     for (int i = 0; i < data->nedge[S]; i++) {
         int v = data->edge[S * V + i];
         int delta = data->residual[S * V + v];
-        if (delta) {
+        if (delta > 0) {
             data->residual[S * V + v] = 0;
             data->residual[v * V + S] += delta;
             data->excess[S] -= delta;
@@ -139,10 +146,11 @@ void PushRelabel(Graph *graph, int *flow) {
     TIMING_END(_preflow);
 
     TIMING_START(_innerPushRelabel);
-    while (data->fifoSize) {
-        int u = fifoPop(data);
+    int u;
+    while ((u = fifoPop(data)) != -1) {
         bool isMin = true;
-        for (int v = 0; v < V; v++) {
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
             if (data->residual[u * V + v] > 0) {
                 if (data->height[u] > data->height[v]) {
                     push(data, u, v);
@@ -164,8 +172,8 @@ void PushRelabel(Graph *graph, int *flow) {
 
     TIMING_START(_flow);
     for (int u = 0; u < V; u++) {
-        for (int i = 0; i < data->nedge[u]; i++) {
-            int v = data->edge[u * V + i];
+        for (int i = 0; i < (int)graph->edge[u].size(); i++) {
+            int v = graph->edge[u][i].first;
             flow[u * V + v] = data->capacity[u * V + v] - data->residual[u * V + v];
         }
     }
