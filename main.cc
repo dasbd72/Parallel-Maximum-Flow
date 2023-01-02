@@ -19,10 +19,10 @@ int main(int argc, char **argv) {
     Graph *graph = new Graph(argc, argv);  // Graph
     int *flow;                             // Output flow matrix
 
-    // Input
-    TIMING_START(Input);
-    graph->input();
-    TIMING_END(Input);
+    // Generate
+    TIMING_START(Generate);
+    graph->generate();
+    TIMING_END(Generate);
 
     flow = (int *)malloc(graph->V * graph->V * sizeof(int));
     memset(flow, 0, graph->V * graph->V * sizeof(int));
@@ -50,10 +50,10 @@ int main(int argc, char **argv) {
     }
     // Max-Flow End
 
-    // Output
-    TIMING_START(Output);
-    graph->output(flow);
-    TIMING_END(Output);
+    // Verify
+    TIMING_START(Verify);
+    graph->verify(flow);
+    TIMING_END(Verify);
 
     // Finalize
     delete graph;

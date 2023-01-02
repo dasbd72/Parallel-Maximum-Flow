@@ -26,6 +26,7 @@
         }                                                                                     \
         __duration_##arg = __temp_##arg.tv_sec + (double)__temp_##arg.tv_nsec / 1000000000.0; \
         printf("%s took %lfs.\n", #arg, __duration_##arg);                                    \
+        fflush(stdout);                                                                       \
     }
 #else
 #define TIMING_START(arg)
