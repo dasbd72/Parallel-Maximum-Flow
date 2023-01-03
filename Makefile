@@ -5,6 +5,8 @@ CXXFLAGS = -Wall -Wextra -O3 -fopenmp -pthread
 # CXXFLAGS += -g -fsanitize=address
 CXXFLAGS += -DTIMING
 CXXFLAGS += -DDEBUG
+CXXFLAGS += -DMETHOD=pr
+CXXFLAGS += -DQTYPE=3
 
 EXE = main
 OBJ = main.o graph.o utility.o ford-fulkerson.o push-relabel.o parallel-push-relabel.o

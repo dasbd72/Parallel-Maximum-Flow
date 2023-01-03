@@ -13,7 +13,7 @@ enum Method {
     pr,
     ppr,
 };
-const Method method = ppr;
+const Method method = METHOD;
 
 int main(int argc, char **argv) {
     Graph *graph = new Graph(argc, argv);  // Graph
