@@ -23,27 +23,33 @@ struct Data {
     int *excess;
     int *residual;
     int *height;
-    pthread_mutex_t *vertexLock;
     int fifoHead;
     int fifoTail;
     int fifoSize;
-    pthread_mutex_t fifoLock;
     int *fifo;
+    int *inqueue;
+    pthread_mutex_t *vertexLock;
+    pthread_mutex_t fifoLock;
 };
 
-inline void fifoPush(Data *data, int u) {
+inline void dataPush(Data *data, int u) {
     pthread_mutex_lock(&data->fifoLock);
     data->fifo[data->fifoTail] = u;
     data->fifoTail = (data->fifoTail + 1) % data->V;
     data->fifoSize++;
+    data->inqueue[u] = 1;
     pthread_mutex_unlock(&data->fifoLock);
 }
 
-inline int fifoPop(Data *data) {
+inline int dataPop(Data *data) {
+    int retVal = -1;
     pthread_mutex_lock(&data->fifoLock);
-    int retVal = data->fifo[data->fifoHead];
-    data->fifoHead = (data->fifoHead + 1) % data->V;
-    data->fifoSize--;
+    if (data->fifoSize > 0) {
+        retVal = data->fifo[data->fifoHead];
+        data->fifoHead = (data->fifoHead + 1) % data->V;
+        data->fifoSize--;
+        data->inqueue[retVal] = 0;
+    }
     pthread_mutex_unlock(&data->fifoLock);
     return retVal;
 }
@@ -56,10 +62,10 @@ inline void push(Data *data, int u, int v) {
         data->residual[u * V + v] -= delta;
         data->residual[v * V + u] += delta;
         data->excess[u] -= delta;
-        if (data->excess[v] == 0 && v != data->S && v != data->T) {
-            fifoPush(data, v);
-        }
         data->excess[v] += delta;
+        if (!data->inqueue[v]) {
+            dataPush(data, v);
+        }
     }
 }
 
@@ -67,41 +73,45 @@ inline void push(Data *data, int u, int v) {
 inline void relabel(Data *data, int u) {
     int V = data->V;
     int minHeight = INT_MAX;
-    for (int v = 0; v < V; v++) {
+    for (int i = 0; i < data->nedge[u]; i++) {
+        int v = data->edge[u * V + i];
         if (data->residual[u * V + v] > 0)
             minHeight = min(minHeight, data->height[v]);
     }
     data->height[u] = minHeight + 1;
 }
 
-void *pushRelabelThread(void *arg) {
-    Data *data = (Data *)arg;
+inline void discharge(Data *data, int u) {
     int V = data->V;
-    while (data->fifoSize) {
-        int u = fifoPop(data);
+    while (data->excess[u]) {
+        // Lock inside discharge to prevent holding
         pthread_mutex_lock(&data->vertexLock[u]);
-        bool isMin = true;
-        for (int v = 0; v < V; v++) {
-            if (data->residual[u * V + v] > 0) {
-                if (data->height[u] > data->height[v]) {
-                    isMin = false;
-                    if (pthread_mutex_trylock(&data->vertexLock[v]) == 0) {
-                        push(data, u, v);
-                        pthread_mutex_unlock(&data->vertexLock[v]);
-                        if (data->excess[u] == 0) {
-                            break;
-                        }
+        relabel(data, u);
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
+            if (data->height[u] > data->height[v] && data->residual[u * V + v] > 0) {
+                // Use trylock to prevent deadlock
+                if (pthread_mutex_trylock(&data->vertexLock[v]) == 0) {
+                    push(data, u, v);
+                    pthread_mutex_unlock(&data->vertexLock[v]);
+                    if (data->excess[u] == 0) {
+                        break;
                     }
                 }
             }
         }
-        if (isMin) {
-            relabel(data, u);
-        }
-        if (data->excess[u] > 0) {
-            fifoPush(data, u);
-        }
         pthread_mutex_unlock(&data->vertexLock[u]);
+    }
+}
+
+void *pushRelabelThread(void *arg) {
+    Data *data = (Data *)arg;
+    int V = data->V;
+    int S = data->S;
+    int T = data->T;
+    for (int u; (u = dataPop(data)) != -1;) {
+        if (u != S && u != T)
+            discharge(data, u);
     }
     return NULL;
 }
@@ -120,35 +130,37 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     data->excess = (int *)malloc(sizeof(int) * V);
     data->residual = (int *)malloc(sizeof(int) * V * V);
     data->height = (int *)malloc(sizeof(int) * V);
-    data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
     data->fifoHead = 0;
     data->fifoTail = 0;
     data->fifoSize = 0;
     data->fifo = (int *)malloc(sizeof(int) * V);
+    data->inqueue = (int *)malloc(sizeof(int) * V);
+    data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
     pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * data->ncpus);
 
     TIMING_START(_init);
-#pragma omp parallel for collapse(2)
     for (int u = 0; u < V; u++) {
         for (int v = 0; v < V; v++) {
             data->capacity[u * V + v] = 0;
             data->residual[u * V + v] = 0;
         }
     }
-#pragma omp parallel for
     for (int u = 0; u < V; u++) {
-        data->nedge[u] = graph->edge[u].size();
-        for (int i = 0; i < data->nedge[u]; i++) {
+        data->nedge[u] = 0;
+    }
+    for (int u = 0; u < V; u++) {
+        for (int i = 0; i < (int)graph->edge[u].size(); i++) {
             int v = graph->edge[u][i].first;
-            data->edge[u * V + i] = v;
+            data->edge[u * V + data->nedge[u]++] = v;
+            data->edge[v * V + data->nedge[v]++] = u;
             data->capacity[u * V + v] = graph->edge[u][i].second;
             data->residual[u * V + v] = graph->edge[u][i].second;
         }
     }
-#pragma omp parallel for
     for (int u = 0; u < V; u++) {
         data->excess[u] = 0;
         data->height[u] = 0;
+        data->inqueue[u] = 0;
     }
     TIMING_END(_init);
 
@@ -158,22 +170,29 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     }
     data->fifoLock = PTHREAD_MUTEX_INITIALIZER;
 
+    TIMING_START(_shortest_path);
+    for (int u = 0; u < V; u++) {
+        data->height[u] = INT_MAX;
+    }
+    data->height[T] = 0;
+    dataPush(data, T);
+    for (int u; (u = dataPop(data)) != -1;) {
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
+            if (data->height[v] == INT_MAX && data->residual[u * V + v]) {
+                data->height[v] = data->height[u] + 1;
+                dataPush(data, v);
+            }
+        }
+    }
+    TIMING_END(_shortest_path);
+
     TIMING_START(_preflow);
-    data->height[S] = V;
+    data->height[S] = V - 1;
     data->excess[S] = INT_MAX;
-#pragma omp parallel for
     for (int i = 0; i < data->nedge[S]; i++) {
         int v = data->edge[S * V + i];
-        int delta = data->residual[S * V + v];
-        if (delta) {
-            data->residual[S * V + v] = 0;
-            data->residual[v * V + S] += delta;
-            data->excess[S] -= delta;
-            if (v != T) {
-                fifoPush(data, v);
-            }
-            data->excess[v] += delta;
-        }
+        push(data, S, v);
     }
     TIMING_END(_preflow);
 
@@ -193,10 +212,9 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     pthread_mutex_destroy(&data->fifoLock);
 
     TIMING_START(_flow);
-#pragma omp parallel for
     for (int u = 0; u < V; u++) {
-        for (int i = 0; i < data->nedge[u]; i++) {
-            int v = data->edge[u * V + i];
+        for (int i = 0; i < (int)graph->edge[u].size(); i++) {
+            int v = graph->edge[u][i].first;
             flow[u * V + v] = data->capacity[u * V + v] - data->residual[u * V + v];
         }
     }
@@ -208,8 +226,9 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     free(data->excess);
     free(data->residual);
     free(data->height);
-    free(data->vertexLock);
     free(data->fifo);
+    free(data->inqueue);
+    free(data->vertexLock);
     free(data);
     free(threads);
 }

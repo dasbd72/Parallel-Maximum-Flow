@@ -26,20 +26,23 @@ struct Data {
     int fifoTail;
     int fifoSize;
     int *fifo;
+    int *inqueue;
 };
 
-inline void fifoPush(Data *data, int u) {
+inline void dataPush(Data *data, int u) {
     data->fifo[data->fifoTail] = u;
     data->fifoTail = (data->fifoTail + 1) % data->V;
     data->fifoSize++;
+    data->inqueue[u] = 1;
 }
 
-inline int fifoPop(Data *data) {
+inline int dataPop(Data *data) {
     int retVal = -1;
     if (data->fifoSize > 0) {
         retVal = data->fifo[data->fifoHead];
         data->fifoHead = (data->fifoHead + 1) % data->V;
         data->fifoSize--;
+        data->inqueue[retVal] = 0;
     }
     return retVal;
 }
@@ -52,10 +55,10 @@ inline void push(Data *data, int u, int v) {
         data->residual[u * V + v] -= delta;
         data->residual[v * V + u] += delta;
         data->excess[u] -= delta;
-        if (data->excess[v] == 0 && v != data->S && v != data->T) {
-            fifoPush(data, v);
-        }
         data->excess[v] += delta;
+        if (!data->inqueue[v]) {
+            dataPush(data, v);
+        }
     }
 }
 
@@ -71,16 +74,19 @@ inline void relabel(Data *data, int u) {
     data->height[u] = minHeight + 1;
 }
 
-inline int getExcess(Data *data) {
+inline void discharge(Data *data, int u) {
     int V = data->V;
-    int S = data->S;
-    int T = data->T;
-    for (int i = 0; i < V; i++) {
-        if (i != S && i != T && data->excess[i] > 0) {
-            return i;
+    while (data->excess[u]) {
+        relabel(data, u);
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
+            if (data->height[u] > data->height[v] && data->residual[u * V + v] > 0) {
+                push(data, u, v);
+                if (data->excess[u] == 0)
+                    break;
+            }
         }
     }
-    return -1;
 }
 }  // namespace PR
 using namespace PR;
@@ -101,6 +107,7 @@ void PushRelabel(Graph *graph, int *flow) {
     data->fifoTail = 0;
     data->fifoSize = 0;
     data->fifo = (int *)malloc(sizeof(int) * V);
+    data->inqueue = (int *)malloc(sizeof(int) * V);
 
     TIMING_START(_init);
     for (int u = 0; u < V; u++) {
@@ -124,49 +131,40 @@ void PushRelabel(Graph *graph, int *flow) {
     for (int u = 0; u < V; u++) {
         data->excess[u] = 0;
         data->height[u] = 0;
+        data->inqueue[u] = 0;
     }
     TIMING_END(_init);
 
+    TIMING_START(_shortest_path);
+    for (int u = 0; u < V; u++) {
+        data->height[u] = INT_MAX;
+    }
+    data->height[T] = 0;
+    dataPush(data, T);
+    for (int u; (u = dataPop(data)) != -1;) {
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
+            if (data->height[v] == INT_MAX && data->residual[u * V + v]) {
+                data->height[v] = data->height[u] + 1;
+                dataPush(data, v);
+            }
+        }
+    }
+    TIMING_END(_shortest_path);
+
     TIMING_START(_preflow);
-    data->height[S] = V;
+    data->height[S] = V - 1;
     data->excess[S] = INT_MAX;
     for (int i = 0; i < data->nedge[S]; i++) {
         int v = data->edge[S * V + i];
-        int delta = data->residual[S * V + v];
-        if (delta > 0) {
-            data->residual[S * V + v] = 0;
-            data->residual[v * V + S] += delta;
-            data->excess[S] -= delta;
-            if (v != T) {
-                fifoPush(data, v);
-            }
-            data->excess[v] += delta;
-        }
+        push(data, S, v);
     }
     TIMING_END(_preflow);
 
     TIMING_START(_innerPushRelabel);
-    int u;
-    while ((u = fifoPop(data)) != -1) {
-        bool isMin = true;
-        for (int i = 0; i < data->nedge[u]; i++) {
-            int v = data->edge[u * V + i];
-            if (data->residual[u * V + v] > 0) {
-                if (data->height[u] > data->height[v]) {
-                    push(data, u, v);
-                    isMin = false;
-                    if (data->excess[u] == 0) {
-                        break;
-                    }
-                }
-            }
-        }
-        if (isMin) {
-            relabel(data, u);
-        }
-        if (data->excess[u] > 0) {
-            fifoPush(data, u);
-        }
+    for (int u; (u = dataPop(data)) != -1;) {
+        if (u != S && u != T)
+            discharge(data, u);
     }
     TIMING_END(_innerPushRelabel);
 
@@ -186,5 +184,6 @@ void PushRelabel(Graph *graph, int *flow) {
     free(data->residual);
     free(data->height);
     free(data->fifo);
+    free(data->inqueue);
     free(data);
 }
