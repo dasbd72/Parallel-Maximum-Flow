@@ -25,6 +25,23 @@ inline double randDouble(double min, double max) {
     return rand() * (max - min) / (RAND_MAX + 1.0) + min;
 }
 
+void dfs(int u, int &time, std::vector<int> &d, std::vector<int> &f, std::vector<int> &c, std::vector<std::vector<std::pair<int, int>>> &raw, std::vector<std::vector<std::pair<int, int>>> &edge) {
+    c[u] = 1;
+    time = time + 1;
+    d[u] = time;
+    for (auto e : raw[u]) {
+        if (c[e.first] != 2) {
+            edge[u].emplace_back(e);
+        }
+        if (c[e.first] == 0) {
+            dfs(e.first, time, d, f, c, raw, edge);
+        }
+    }
+    c[u] = 2;
+    time = time + 1;
+    f[u] = time;
+}
+
 void Graph::generate() {
     srand(17 ^ V);
 
@@ -33,9 +50,7 @@ void Graph::generate() {
         T = randInt(0, V - 1);
     } while (T == S);
 
-    capacity = (int *)malloc(V * V * sizeof(int));
-    memset(capacity, 0, sizeof(int) * V * V);
-    E = 0;
+    std::vector<std::vector<std::pair<int, int>>> raw(V);
     // one-way edge
     for (int r = 0; r < V; r++) {
         for (int c = 0; c < r; c++) {
@@ -43,28 +58,29 @@ void Graph::generate() {
             if (prob < D) {
                 int cap = randInt(0, 1000);
                 if (cap > 0) {
-                    E++;
                     if (prob < D / 2) {
-                        capacity[r * V + c] = cap;
+                        raw[r].emplace_back(c, cap);
                     } else {
-                        capacity[c * V + r] = cap;
+                        raw[c].emplace_back(r, cap);
                     }
                 }
             }
         }
     }
 
-    int cnt = 0;
     edge.resize(V);
-    for (int r = 0; r < V; r++) {
-        for (int c = 0; c < V; c++) {
-            if (capacity[r * V + c] != 0) {
-                edge[r].emplace_back(c, capacity[r * V + c]);
-                cnt++;
-            }
-        }
+    // Acyclic edge
+    int time = 0;
+    std::vector<int> d(V, 0);
+    std::vector<int> f(V, 0);
+    std::vector<int> c(V, 0);
+    dfs(S, time, d, f, c, raw, edge);
+
+    // count & capacity
+    E = 0;
+    for (int u = 0; u < V; u++) {
+        E += edge[u].size();
     }
-    assert(cnt == E);
 }
 
 enum {
@@ -76,7 +92,7 @@ enum {
     REACHED_TARGET
 };
 
-inline int check(int V, int S, int T, int *capacity, int *flow, bool *visit, int *sum) {
+inline int check(int V, int S, int T, int *capacity, bool *visit, int *sum, int *flow) {
     memset(sum, 0, sizeof(int) * V);
     for (int r = 0; r < V; r++) {
         for (int c = 0; c < V; c++) {
@@ -126,7 +142,16 @@ inline int check(int V, int S, int T, int *capacity, int *flow, bool *visit, int
 void Graph::verify(int *flow) {
     bool *visit = (bool *)malloc(sizeof(bool) * V);
     int *sum = (int *)malloc(sizeof(int) * V);
-    int err = check(V, S, T, capacity, flow, visit, sum);
+    int *capacity = (int *)malloc(V * V * sizeof(int));
+    int err;
+
+    memset(capacity, 0, sizeof(int) * V * V);
+    for (int u = 0; u < V; u++) {
+        for (auto e : edge[u]) {
+            capacity[u * V + e.first] = e.second;
+        }
+    }
+    err = check(V, S, T, capacity, visit, sum, flow);
     if (err == SUCCESS) {
         printf("\033[1;32m");
         printf("Passed.\n");

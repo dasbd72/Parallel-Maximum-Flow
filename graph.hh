@@ -12,7 +12,6 @@ class Graph {
     double D;
     int ncpus;
     std::vector<std::vector<std::pair<int, int>>> edge;
-    int *capacity;
 
     Graph(int argc, char **argv);
     ~Graph() {}
