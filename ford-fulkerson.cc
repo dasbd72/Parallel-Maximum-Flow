@@ -25,7 +25,7 @@ struct Data {
     bool *visited;
 };
 
-int getcf(Data *data) {
+inline int getcf(Data *data) {
     int V = data->V;
     int S = data->S;
     int T = data->T;
@@ -36,7 +36,7 @@ int getcf(Data *data) {
     return cf;
 }
 
-int getPath(Data *data) {
+inline int getPath(Data *data) {
     int V = data->V;
     int S = data->S;
     int T = data->T;
