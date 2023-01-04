@@ -39,8 +39,10 @@ struct Data {
 #elif QTYPE == 4
     int *label;
 #endif
-    pthread_mutex_t *vertexLock;
-    pthread_mutex_t queLock;
+    // pthread_mutex_t *vertexLock;
+    pthread_spinlock_t *vertexLock;
+    // pthread_mutex_t queLock;
+    pthread_spinlock_t queLock;
 };
 
 inline int min(int x, int y) {
@@ -57,7 +59,8 @@ inline void swap(int *x, int *y) {
 }
 
 inline void quePush(Data *data, int u) {
-    pthread_mutex_lock(&data->queLock);
+    // pthread_mutex_lock(&data->queLock);
+    pthread_spin_lock(&data->queLock);
 #if QTYPE == 0
     data->queue[data->queBack] = u;
     data->queBack = (data->queBack + 1) % data->V;
@@ -77,12 +80,14 @@ inline void quePush(Data *data, int u) {
         idx = idx / 2;
     }
 #endif
-    pthread_mutex_unlock(&data->queLock);
+    // pthread_mutex_unlock(&data->queLock);
+    pthread_spin_unlock(&data->queLock);
 }
 
 inline int quePop(Data *data) {
     int retVal = -1;
-    pthread_mutex_lock(&data->queLock);
+    // pthread_mutex_lock(&data->queLock);
+    pthread_spin_lock(&data->queLock);
 #if QTYPE == 0
     if (data->queSize > 0) {
         retVal = data->queue[data->queFront];
@@ -126,7 +131,8 @@ inline int quePop(Data *data) {
         }
     }
 #endif
-    pthread_mutex_unlock(&data->queLock);
+    // pthread_mutex_unlock(&data->queLock);
+    pthread_spin_unlock(&data->queLock);
     return retVal;
 }
 
@@ -161,15 +167,19 @@ inline void discharge(Data *data, int u) {
     bool done = false;
     while (!done) {
         // Lock inside discharge to prevent holding
-        pthread_mutex_lock(&data->vertexLock[u]);
+        // pthread_mutex_lock(&data->vertexLock[u]);
+        pthread_spin_lock(&data->vertexLock[u]);
         relabel(data, u);
         for (int i = 0; i < data->nedge[u]; i++) {
             int v = data->edge[u * V + i];
             if (data->height[u] > data->height[v] && data->residual[u * V + v] > 0) {
                 // Use trylock to prevent deadlock
-                if (pthread_mutex_trylock(&data->vertexLock[v]) == 0) {
+                // int err = pthread_mutex_trylock(&data->vertexLock[v]);
+                int err = pthread_spin_trylock(&data->vertexLock[v]);
+                if (err == 0) {
                     push(data, u, v);
-                    pthread_mutex_unlock(&data->vertexLock[v]);
+                    // pthread_mutex_unlock(&data->vertexLock[v]);
+                    pthread_spin_unlock(&data->vertexLock[v]);
                     if (data->excess[u] == 0) {
                         data->inqueue[u] = 0;
                         done = true;
@@ -178,7 +188,8 @@ inline void discharge(Data *data, int u) {
                 }
             }
         }
-        pthread_mutex_unlock(&data->vertexLock[u]);
+        // pthread_mutex_unlock(&data->vertexLock[u]);
+        pthread_spin_unlock(&data->vertexLock[u]);
     }
 }
 
@@ -208,7 +219,8 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     data->excess = (int *)malloc(sizeof(int) * V);
     data->residual = (int *)malloc(sizeof(int) * V * V);
     data->height = (int *)malloc(sizeof(int) * V);
-    data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
+    // data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
+    data->vertexLock = (pthread_spinlock_t *)malloc(sizeof(pthread_spinlock_t) * V);
     data->queue = (int *)malloc(sizeof(int) * (data->V + 1));
     data->queSize = 0;
     data->inqueue = (int *)malloc(sizeof(int) * data->V);
@@ -227,9 +239,11 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
 #endif
     pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * data->ncpus);
     for (int u = 0; u < V; u++) {
-        data->vertexLock[u] = PTHREAD_MUTEX_INITIALIZER;
+        // pthread_mutex_init(&data->vertexLock[u], 0);
+        pthread_spin_init(&data->vertexLock[u], 0);
     }
-    data->queLock = PTHREAD_MUTEX_INITIALIZER;
+    // pthread_mutex_init(&data->queLock, 0);
+    pthread_spin_init(&data->queLock, 0);
 
     TIMING_START(_init);
     {
@@ -339,9 +353,11 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     TIMING_END(_flow);
 
     for (int u = 0; u < V; u++) {
-        pthread_mutex_destroy(&data->vertexLock[u]);
+        // pthread_mutex_destroy(&data->vertexLock[u]);
+        pthread_spin_destroy(&data->vertexLock[u]);
     }
-    pthread_mutex_destroy(&data->queLock);
+    // pthread_mutex_destroy(&data->queLock);
+    pthread_spin_destroy(&data->queLock);
     free(data->edge);
     free(data->nedge);
     free(data->excess);
@@ -355,7 +371,7 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
 #elif QTYPE == 3
     free(data->label);
 #endif
-    free(data->vertexLock);
+    free((void *)data->vertexLock);
     free(data);
     free(threads);
 }
