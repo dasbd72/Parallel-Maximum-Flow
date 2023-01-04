@@ -1,12 +1,14 @@
 CC = gcc
 CXX = g++
 LDFLAGS = -lm
-CXXFLAGS = -Wall -Wextra -O3 -fopenmp -pthread
+CXXFLAGS = -fopenmp -pthread
+CXXFLAGS += -O3
+CXXFLAGS += -Wall -Wextra
 # CXXFLAGS += -g -fsanitize=address
 CXXFLAGS += -DTIMING
 CXXFLAGS += -DDEBUG
-CXXFLAGS += -DMETHOD=pr
-CXXFLAGS += -DQTYPE=3
+CXXFLAGS += -DMETHOD=ppr
+CXXFLAGS += -DQTYPE=0
 
 EXE = main
 OBJ = main.o graph.o utility.o ford-fulkerson.o push-relabel.o parallel-push-relabel.o

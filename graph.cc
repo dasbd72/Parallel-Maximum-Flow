@@ -56,7 +56,7 @@ void Graph::generate() {
         for (int c = 0; c < r; c++) {
             double prob = randDouble(0, 1);
             if (prob < D) {
-                int cap = randInt(0, 1000);
+                int cap = randInt(0, 100000000);
                 if (cap > 0) {
                     if (prob < D / 2) {
                         raw[r].emplace_back(c, cap);
