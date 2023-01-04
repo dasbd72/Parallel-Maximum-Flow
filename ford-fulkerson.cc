@@ -12,6 +12,7 @@
 #include "graph.hh"
 #include "utility.hh"
 
+namespace FF {
 struct Data {
     int V;
     int S;
@@ -24,6 +25,13 @@ struct Data {
     int *rpath;
     bool *visited;
 };
+
+inline int min(int x, int y) {
+    if (x < y)
+        return x;
+    else
+        return y;
+}
 
 inline int getcf(Data *data) {
     int V = data->V;
@@ -66,8 +74,10 @@ inline int getPath(Data *data) {
 
     return 0;
 }
+}  // namespace FF
 
 void FordFulkerson(Graph *graph, int *flow) {
+    using namespace FF;
     Data *data = (Data *)malloc(sizeof(Data));
     int V = data->V = graph->V;
     int S = data->S = graph->S;
