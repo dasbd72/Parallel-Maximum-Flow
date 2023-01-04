@@ -23,20 +23,16 @@ struct Data {
     int *excess;
     int *residual;
     int *height;
+    int *inqueue;
+    int *vertexCnt;
+#if QTYPE == 0
     int *queue;
     int queSize;
-    int *inqueue;
-    int *cnt;
-#if QTYPE == 0
     int queFront;
     int queBack;
-#elif QTYPE == 1
-    int *label;
-#elif QTYPE == 2
-    int *label;
-#elif QTYPE == 3
-    int *label;
-#elif QTYPE == 4
+#elif QTYPE == 1 || QTYPE == 2 || QTYPE == 3 || QTYPE == 4
+    int *queue;
+    int queSize;
     int *label;
 #endif
     // pthread_mutex_t *vertexLock;
@@ -136,6 +132,28 @@ inline int quePop(Data *data) {
     return retVal;
 }
 
+inline void shortestPath(Data *data) {
+    int V = data->V;
+    int T = data->T;
+    for (int u = 0; u < V; u++) {
+        data->height[u] = INT_MAX;
+    }
+    data->height[T] = 0;
+    std::queue<int> que;
+    que.push(T);
+    while (que.size()) {
+        int u = que.front();
+        que.pop();
+        for (int i = 0; i < data->nedge[u]; i++) {
+            int v = data->edge[u * V + i];
+            if (data->height[v] == INT_MAX && data->residual[u * V + v] > 0) {
+                data->height[v] = data->height[u] + 1;
+                que.push(v);
+            }
+        }
+    }
+}
+
 // applies if excess[u] > 0, residual[u * V + v] > 0, and height[u] = height[v] + 1
 inline void push(Data *data, int u, int v) {
     int V = data->V;
@@ -195,11 +213,10 @@ inline void discharge(Data *data, int u) {
 
 void *pushRelabelThread(void *arg) {
     Data *data = (Data *)arg;
-    int V = data->V;
     int S = data->S;
     int T = data->T;
     for (int u; (u = quePop(data)) != -1;) {
-        data->cnt[u]++;
+        data->vertexCnt[u]++;
         if (u != S && u != T)
             discharge(data, u);
     }
@@ -212,19 +229,19 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     Data *data = (Data *)malloc(sizeof(Data));
     int V = data->V = graph->V;
     int S = data->S = graph->S;
-    int T = data->T = graph->T;
+    data->T = graph->T;
     data->ncpus = graph->ncpus;
     data->edge = (int *)malloc(sizeof(int) * V * V);
     data->nedge = (int *)malloc(sizeof(int) * V);
     data->excess = (int *)malloc(sizeof(int) * V);
     data->residual = (int *)malloc(sizeof(int) * V * V);
     data->height = (int *)malloc(sizeof(int) * V);
-    // data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
-    data->vertexLock = (pthread_spinlock_t *)malloc(sizeof(pthread_spinlock_t) * V);
+    data->inqueue = (int *)malloc(sizeof(int) * data->V);
+    data->vertexCnt = (int *)malloc(sizeof(int) * data->V);
+#if QTYPE == 0 || QTYPE == 1 || QTYPE == 2 || QTYPE == 3 || QTYPE == 4
     data->queue = (int *)malloc(sizeof(int) * (data->V + 1));
     data->queSize = 0;
-    data->inqueue = (int *)malloc(sizeof(int) * data->V);
-    data->cnt = (int *)malloc(sizeof(int) * data->V);
+#endif
 #if QTYPE == 0
     data->queFront = 0;
     data->queBack = 0;
@@ -235,8 +252,10 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
 #elif QTYPE == 3
     data->label = (int *)malloc(sizeof(int) * data->V);  // Separates layer
 #elif QTYPE == 4
-    data->label = data->cnt;  // Appearance
+    data->label = data->vertexCnt;  // Appearance
 #endif
+    // data->vertexLock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * V);
+    data->vertexLock = (pthread_spinlock_t *)malloc(sizeof(pthread_spinlock_t) * V);
     pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * data->ncpus);
     for (int u = 0; u < V; u++) {
         // pthread_mutex_init(&data->vertexLock[u], 0);
@@ -267,30 +286,14 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
             data->excess[u] = 0;
             data->height[u] = 0;
             data->inqueue[u] = 0;
-            data->cnt[u] = 0;
+            data->vertexCnt[u] = 0;
         }
     }
     TIMING_END(_init);
 
     TIMING_START(_shortest_path);
     {
-        for (int u = 0; u < V; u++) {
-            data->height[u] = INT_MAX;
-        }
-        data->height[T] = 0;
-        std::queue<int> que;
-        que.push(T);
-        while (que.size()) {
-            int u = que.front();
-            que.pop();
-            for (int i = 0; i < data->nedge[u]; i++) {
-                int v = data->edge[u * V + i];
-                if (data->height[v] == INT_MAX && data->residual[u * V + v]) {
-                    data->height[v] = data->height[u] + 1;
-                    que.push(v);
-                }
-            }
-        }
+        shortestPath(data);
     }
     TIMING_END(_shortest_path);
 
@@ -336,7 +339,7 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     {
         int sum = 0;
         for (int i = 0; i < V; i++) {
-            sum += data->cnt[i];
+            sum += data->vertexCnt[i];
         }
         printf("Ave: %d\n", sum / V);
     }
@@ -363,12 +366,12 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     free(data->excess);
     free(data->residual);
     free(data->height);
-    free(data->queue);
     free(data->inqueue);
-    free(data->cnt);
-#if QTYPE == 2
-    free(data->label);
-#elif QTYPE == 3
+    free(data->vertexCnt);
+#if QTYPE == 0 || QTYPE == 1 || QTYPE == 2 || QTYPE == 3 || QTYPE == 4
+    free(data->queue);
+#endif
+#if QTYPE == 2 || QTYPE == 3
     free(data->label);
 #endif
     free((void *)data->vertexLock);
