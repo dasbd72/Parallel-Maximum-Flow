@@ -18,7 +18,6 @@ struct Data {
     int S;
     int T;
     int ncpus;
-    int *capacity;
     int *edge;
     int *nedge;
     int *excess;
@@ -204,7 +203,6 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     int S = data->S = graph->S;
     int T = data->T = graph->T;
     data->ncpus = graph->ncpus;
-    data->capacity = (int *)malloc(sizeof(int) * V * V);
     data->edge = (int *)malloc(sizeof(int) * V * V);
     data->nedge = (int *)malloc(sizeof(int) * V);
     data->excess = (int *)malloc(sizeof(int) * V);
@@ -223,7 +221,7 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
 #elif QTYPE == 2
     data->label = (int *)malloc(sizeof(int) * data->V);  // Distance
 #elif QTYPE == 3
-    data->label = (int *)malloc(sizeof(int) * data->V);  // Seperates layer
+    data->label = (int *)malloc(sizeof(int) * data->V);  // Separates layer
 #elif QTYPE == 4
     data->label = data->cnt;  // Appearance
 #endif
@@ -237,7 +235,6 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
     {
         for (int u = 0; u < V; u++) {
             for (int v = 0; v < V; v++) {
-                data->capacity[u * V + v] = 0;
                 data->residual[u * V + v] = 0;
             }
         }
@@ -249,7 +246,6 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
                 int v = graph->edge[u][i].first;
                 data->edge[u * V + data->nedge[u]++] = v;
                 data->edge[v * V + data->nedge[v]++] = u;
-                data->capacity[u * V + v] = graph->edge[u][i].second;
                 data->residual[u * V + v] = graph->edge[u][i].second;
             }
         }
@@ -336,7 +332,7 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
         for (int u = 0; u < V; u++) {
             for (int i = 0; i < (int)graph->edge[u].size(); i++) {
                 int v = graph->edge[u][i].first;
-                flow[u * V + v] = data->capacity[u * V + v] - data->residual[u * V + v];
+                flow[u * V + v] = graph->edge[u][i].second - data->residual[u * V + v];
             }
         }
     }
@@ -346,7 +342,6 @@ void ParallelPushRelabel(Graph *graph, int *flow) {
         pthread_mutex_destroy(&data->vertexLock[u]);
     }
     pthread_mutex_destroy(&data->queLock);
-    free(data->capacity);
     free(data->edge);
     free(data->nedge);
     free(data->excess);
