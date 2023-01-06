@@ -52,11 +52,12 @@ void Graph::generate() {
 
     std::vector<std::vector<std::pair<int, int>>> raw(V);
     // one-way edge
+#ifdef GRAPH_ONE_WAY
     for (int r = 0; r < V; r++) {
         for (int c = 0; c < r; c++) {
             double prob = randDouble(0, 1);
             if (prob < D) {
-                int cap = randInt(0, 100000000);
+                int cap = randInt(0, 10000);
                 if (cap > 0) {
                     if (prob < D / 2) {
                         raw[r].emplace_back(c, cap);
@@ -67,7 +68,25 @@ void Graph::generate() {
             }
         }
     }
+#else
+    for (int r = 0; r < V; r++) {
+        for (int c = 0; c < V; c++) {
+            double prob = randDouble(0, 1);
+            if (prob < D) {
+                int cap = randInt(0, 10000);
+                if (cap > 0) {
+                    if (prob < D / 2) {
+                        raw[r].emplace_back(c, cap);
+                    } else {
+                        raw[c].emplace_back(r, cap);
+                    }
+                }
+            }
+        }
+    }
+#endif
 
+#ifdef GRAPH_ACYCLIC
     edge.resize(V);
     // Acyclic edge
     int time = 0;
@@ -75,6 +94,9 @@ void Graph::generate() {
     std::vector<int> f(V, 0);
     std::vector<int> c(V, 0);
     dfs(S, time, d, f, c, raw, edge);
+#else
+    edge = raw;
+#endif
 
     // count & capacity
     E = 0;
