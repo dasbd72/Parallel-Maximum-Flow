@@ -297,14 +297,6 @@ void PushRelabel(Graph *graph, int *flow) {
     }
     TIMING_END(_innerPushRelabel);
 
-    {
-        int sum = 0;
-        for (int i = 0; i < V; i++) {
-            sum += data->vertexCnt[i];
-        }
-        printf("Ave: %d\n", sum / V);
-    }
-
     TIMING_START(_flow);
     {
         for (int u = 0; u < V; u++) {
@@ -315,6 +307,22 @@ void PushRelabel(Graph *graph, int *flow) {
         }
     }
     TIMING_END(_flow);
+
+    {
+        // Profile
+        int sum = 0;
+        int maxcnt = 0;
+        int mincnt = INT_MAX;
+        for (int i = 0; i < V; i++) {
+            sum += data->vertexCnt[i];
+            maxcnt = maxcnt > data->vertexCnt[i] ? maxcnt : data->vertexCnt[i];
+            mincnt = mincnt < data->vertexCnt[i] ? mincnt : data->vertexCnt[i];
+        }
+        printf(" Ave cnt: %d\n", sum / V);
+        printf(" Max cnt: %d\n", maxcnt);
+        printf(" Min cnt: %d\n", mincnt);
+        printf(" Max Flow: %d\n", data->excess[data->T]);
+    }
 
     free(data->edge);
     free(data->nedge);
