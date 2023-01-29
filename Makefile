@@ -11,7 +11,7 @@ CXXFLAGS += -DGRAPH_ONE_WAY
 CXXFLAGS += -DGRAPH_ACYCLIC
 CXXFLAGS += -DSPINLOCK
 CXXFLAGS += -DMETHOD=ppr
-CXXFLAGS += -DQTYPE=0
+CXXFLAGS += -DQTYPE=2
 
 EXE = main
 OBJ = main.o graph.o utility.o ford-fulkerson.o push-relabel.o parallel-push-relabel.o

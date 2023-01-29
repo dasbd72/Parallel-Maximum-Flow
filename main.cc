@@ -27,6 +27,9 @@ int main(int argc, char **argv) {
     flow = (int *)malloc(graph->V * graph->V * sizeof(int));
     memset(flow, 0, graph->V * graph->V * sizeof(int));
 
+    printf("V: %d\n", graph->V);
+    printf("E: %d\n", graph->E);
+
     // Max-Flow
     switch (method) {
         case ff:
